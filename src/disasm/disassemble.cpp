@@ -224,7 +224,11 @@ Instruction *DisassembleInstruction::instruction(const std::string &bytes,
     auto ins = runDisassembly(
         reinterpret_cast<const uint8_t *>(bytes.c_str()),
         bytes.length(), address);
-    return instruction(ins);
+    auto ret = instruction(ins);
+
+    free(ins);
+
+    return ret;
 }
 
 Instruction *DisassembleInstruction::instruction(
@@ -233,7 +237,11 @@ Instruction *DisassembleInstruction::instruction(
     auto ins = runDisassembly(static_cast<const uint8_t *>(bytes.data()),
         bytes.size(), address);
 
-    return instruction(ins);
+    auto ret = instruction(ins);
+
+    free(ins);
+
+    return ret;
 }
 
 Instruction *DisassembleInstruction::instruction(cs_insn *ins) {
@@ -650,6 +658,30 @@ FunctionList *DisassembleX86Function::linearDisassembly(const char *sectionName,
         }
         else {
             LOG(1, "FDE is out of bounds of .text section, skipping");
+        }
+    }
+
+    // Known functions from symbol information as well
+    for(size_t i = 0; i < dynamicSymbolList->getCount(); i ++) {
+        Symbol *symbol = dynamicSymbolList->get(i);
+        // only care about functions/ifuncs
+        if(symbol->getType() != Symbol::TYPE_FUNC
+            && symbol->getType() != Symbol::TYPE_IFUNC) {
+
+            continue;
+        }
+        if(symbol->getSize() == 0) {
+            LOG(1, "dynamic function [" << symbol->getName()
+                << "] has size 0, skipping.");
+            continue;
+        }
+        Range range(symbol->getAddress(), symbol->getSize());
+        if(knownFunctions.add(range)) {
+            LOG(12, "Dynamic symbol at [" << std::hex << symbol->getAddress()
+                << ",+" << symbol->getSize() << "]");
+        }
+        else {
+            LOG(1, "Dynamic symbol is out of bounds of .text section, skipping");
         }
     }
 
